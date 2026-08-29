@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
-from waldur_site_agent.backend.exceptions import ConfigurationError
+from waldur_site_agent.backend.exceptions import BackendError, ConfigurationError
 
 from waldur_site_agent_proxmox.backend import ProxmoxBackend, ProxmoxBackendSettings
 
@@ -33,6 +33,15 @@ def test_backend_rejects_invalid_config_without_secret_in_error():
     with pytest.raises(ConfigurationError) as caught:
         ProxmoxBackend(invalid, {})
     assert "must-not-leak" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "resource",
+    [SimpleNamespace(slug="", name=""), SimpleNamespace(slug="", name="", uuid="invalid")],
+)
+def test_name_fallback_rejects_missing_or_invalid_uuid(resource):
+    with pytest.raises(BackendError, match="UUID is invalid"):
+        ProxmoxBackend._name(resource)
 
 
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")

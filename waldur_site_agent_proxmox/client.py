@@ -183,14 +183,16 @@ class ProxmoxClient(BaseClient):
         self.wait_for_task(result)
 
     def _set_marker(self, vmid: int, value: str) -> None:
-        config = self._api(
-            "VM config lookup", lambda: self.api.nodes(self.node).qemu(vmid).config.get()
-        )
+        vm = self.get_vm(vmid)
+        if vm is None:
+            raise BackendError(f"Proxmox VM {vmid} does not exist")
+        node = str(vm.get("node") or self.node)
+        config = self._api("VM config lookup", lambda: self.api.nodes(node).qemu(vmid).config.get())
         tags = self._tags(config.get("tags") if isinstance(config, dict) else None)
         tags.add(self.marker(value))
         result = self._api(
             "VM tag update",
-            lambda: self.api.nodes(self.node).qemu(vmid).config.put(tags=";".join(sorted(tags))),
+            lambda: self.api.nodes(node).qemu(vmid).config.put(tags=";".join(sorted(tags))),
         )
         self._poll_result(result)
 

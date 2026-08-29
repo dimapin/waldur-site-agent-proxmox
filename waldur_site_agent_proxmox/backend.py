@@ -51,7 +51,10 @@ class ProxmoxBackend(BaseBackend):
         value = re.sub(r"[^a-zA-Z0-9-]+", "-", raw).strip("-").lower()
         if value:
             return value[:63].rstrip("-")
-        resource_uuid = uuid.UUID(str(waldur_resource.uuid))
+        try:
+            resource_uuid = uuid.UUID(str(getattr(waldur_resource, "uuid", "")))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise BackendError("Waldur resource UUID is invalid") from exc
         return f"waldur-{str(resource_uuid)[:8]}"
 
     def ping(self, raise_exception: bool = False) -> bool:

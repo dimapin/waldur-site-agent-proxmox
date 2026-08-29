@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 from proxmoxer.core import ResourceException
@@ -96,6 +96,22 @@ def test_duplicate_markers_are_visible_error():
     )
     with pytest.raises(BackendError, match="Multiple"):
         client.find_by_waldur_uuid(UUID)
+
+
+def test_set_marker_uses_vm_node_from_public_lookup():
+    client = make_client()
+    client.get_vm = MagicMock(return_value={"vmid": 101, "node": "pve-b"})
+    config = client.api.nodes.return_value.qemu.return_value.config
+    config.get.return_value = {"tags": "existing"}
+    config.put.return_value = UPID
+    client._poll_result = MagicMock()
+
+    client._set_marker(101, UUID)
+
+    client.get_vm.assert_called_once_with(101)
+    assert client.api.nodes.call_args_list == [call("pve-b"), call("pve-b")]
+    config.put.assert_called_once_with(tags=f"existing;{client.marker(UUID)}")
+    client._poll_result.assert_called_once_with(UPID)
 
 
 def test_nextid_collision_is_retried():

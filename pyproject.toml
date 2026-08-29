@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "waldur-site-agent-proxmox"
+version = "0.1.0"
+description = "Proxmox backend plugin for Waldur Site Agent"
+readme = "README.md"
+requires-python = ">=3.9.2,<4.0"
+license = { text = "MIT" }
+dependencies = [
+  "proxmoxer==2.3.0",
+  "requests>=2.31,<3",
+  "waldur-site-agent==1.0.6rc19",
+]
+
+[project.entry-points."waldur_site_agent.backends"]
+proxmox = "waldur_site_agent_proxmox.backend:ProxmoxBackend"
+
+[project.entry-points."waldur_site_agent.backend_settings_schemas"]
+proxmox = "waldur_site_agent_proxmox.backend:ProxmoxBackendSettings"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["waldur_site_agent_proxmox"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+addopts = "-ra"
+markers = ["e2e: tests requiring a real Proxmox cluster"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["UP045"]

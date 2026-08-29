@@ -43,7 +43,7 @@ Build the image from the repository root:
 docker build -t waldur-site-agent-proxmox:local .
 ```
 
-Run it with a complete agent configuration mounted as a secret:
+Run it with a complete agent configuration bind-mounted into the container:
 
 ```bash
 docker run --rm \

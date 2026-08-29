@@ -12,7 +12,8 @@ RUN python -m pip wheel --no-cache-dir --wheel-dir /wheels .
 FROM python:${PYTHON_VERSION} AS runtime
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin agent
 COPY --from=builder /wheels /wheels

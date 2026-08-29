@@ -1,3 +1,3 @@
 # CONTRACT (vendored)
-Quelle: waldur-multicloud docs/contracts/README.md bei Tag contract-v1.
+Quelle: Repository waldur-multicloud unter docs/contracts/README.md bei Tag contract-v1.
 Wird beim Pin-Update-MR aktualisiert — nie von Hand editieren.

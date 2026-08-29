@@ -48,13 +48,20 @@ def test_name_fallback_rejects_missing_or_invalid_uuid(resource):
 def test_create_returns_confirmed_backend_id(client_class):
     client = client_class.return_value
     client.provision_vm.return_value = "123"
-    backend = ProxmoxBackend(SETTINGS, {})
+    backend = ProxmoxBackend(
+        SETTINGS, {"cores": {"label": "Cores", "measured_unit": "cores", "unit_factor": 2}}
+    )
     resource = SimpleNamespace(
-        uuid="12345678-1234-5678-1234-567812345678", slug="resource", name="Resource"
+        uuid="12345678-1234-5678-1234-567812345678",
+        slug="resource",
+        name="Resource",
+        limits={"cores": 4},
     )
     info = backend.create_resource(resource)
     assert info.backend_id == "123"
     assert info.backend_metadata == {}
+    assert info.limits == {"cores": 4}
+    client.set_resource_limits.assert_called_once_with("123", {"cores": 8})
 
 
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
@@ -80,12 +87,27 @@ def test_metadata_uses_public_client_vm_lookup(client_class):
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
 def test_terminate_delegates_and_empty_id_is_noop(client_class):
     client = client_class.return_value
+    client.get_resource.return_value = SimpleNamespace()
     backend = ProxmoxBackend(SETTINGS, {})
     assert backend.delete_resource(SimpleNamespace(backend_id="123")) is None
-    client.delete_vm.assert_called_once_with("123")
+    client.delete_resource.assert_called_once_with("123")
     client.reset_mock()
     backend.delete_resource(SimpleNamespace(backend_id=""))
-    client.delete_vm.assert_not_called()
+    client.delete_resource.assert_not_called()
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_terminate_honors_soft_delete(client_class):
+    client = client_class.return_value
+    client.get_resource.return_value = SimpleNamespace()
+    backend = ProxmoxBackend(
+        dict(SETTINGS, soft_delete=True),
+        {"cores": {"unit_factor": 1}, "memory": {"unit_factor": 1}},
+    )
+
+    assert backend.delete_resource(SimpleNamespace(backend_id="123")) is None
+    client.set_resource_limits.assert_called_once_with("123", {"cores": 0, "memory": 0})
+    client.delete_resource.assert_not_called()
 
 
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")

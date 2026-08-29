@@ -54,10 +54,10 @@ readinessProbe:
   periodSeconds: 30
   timeoutSeconds: 10
   failureThreshold: 3
+  maxAge: 300
 
 resources: {}
 
 nodeSelector: {}
 tolerations: []
 affinity: {}
-

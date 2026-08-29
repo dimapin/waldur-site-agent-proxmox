@@ -68,7 +68,7 @@ spec:
                 - --config-file
                 - /etc/waldur-site-agent/config.yaml
                 - --max-age
-                - {{ .Values.livenessProbe.maxAge | quote }}
+                - {{ .Values.readinessProbe.maxAge | quote }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
@@ -103,4 +103,3 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-

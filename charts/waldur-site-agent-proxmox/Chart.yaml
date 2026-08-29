@@ -1,0 +1,7 @@
+apiVersion: v2
+name: waldur-site-agent-proxmox
+description: Waldur Site Agent with the Proxmox backend plugin
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+

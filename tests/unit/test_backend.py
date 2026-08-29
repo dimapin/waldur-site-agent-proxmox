@@ -1,0 +1,75 @@
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
+from pydantic import ValidationError
+from waldur_site_agent.backend.exceptions import ConfigurationError
+
+from waldur_site_agent_proxmox.backend import ProxmoxBackend, ProxmoxBackendSettings
+
+SETTINGS = {
+    "host": "pve.example",
+    "user": "agent@pve",
+    "token_name": "waldur",
+    "token_value": "secret-value",
+    "node": "pve-a",
+    "template_vmid": 9000,
+}
+
+
+def test_settings_require_provider_configuration():
+    with pytest.raises(ValidationError):
+        ProxmoxBackendSettings.model_validate({})
+
+
+def test_settings_repr_redacts_secret():
+    settings = ProxmoxBackendSettings.model_validate(SETTINGS)
+    assert "secret-value" not in repr(settings)
+    assert "**********" in repr(settings)
+
+
+def test_backend_rejects_invalid_config_without_secret_in_error():
+    invalid = dict(SETTINGS, node="", token_value="must-not-leak")
+    with pytest.raises(ConfigurationError) as caught:
+        ProxmoxBackend(invalid, {})
+    assert "must-not-leak" not in str(caught.value)
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_create_returns_confirmed_backend_id(client_class):
+    client = client_class.return_value
+    client.provision_vm.return_value = "123"
+    client._find_vm.return_value = {
+        "vmid": 123,
+        "name": "resource",
+        "node": "pve-a",
+        "status": "stopped",
+    }
+    backend = ProxmoxBackend(SETTINGS, {})
+    resource = SimpleNamespace(
+        uuid="12345678-1234-5678-1234-567812345678", slug="resource", name="Resource"
+    )
+    info = backend.create_resource(resource)
+    assert info.backend_id == "123"
+    assert info.backend_metadata == {}
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_terminate_delegates_and_empty_id_is_noop(client_class):
+    client = client_class.return_value
+    backend = ProxmoxBackend(SETTINGS, {})
+    assert backend.delete_resource(SimpleNamespace(backend_id="123")) is None
+    client.delete_vm.assert_called_once_with("123")
+    client.reset_mock()
+    backend.delete_resource(SimpleNamespace(backend_id=""))
+    client.delete_vm.assert_not_called()
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_pause_and_restore_wait_through_client(client_class):
+    client = client_class.return_value
+    backend = ProxmoxBackend(SETTINGS, {})
+    assert backend.pause_resource("123") is True
+    assert backend.restore_resource("123") is True
+    client.stop_vm.assert_called_once_with("123")
+    client.start_vm.assert_called_once_with("123")

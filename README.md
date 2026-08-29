@@ -63,8 +63,8 @@ helm upgrade --install proxmox-agent charts/waldur-site-agent-proxmox \
   --set-file config.content=config.yaml
 ```
 
-For production deployments, create the configuration Secret separately and reference it
-without putting credentials in Helm values:
+For deployments where you want to avoid storing credentials in Helm values, create the configuration Secret separately and reference it
+using `config.existingSecret`:
 
 ```bash
 kubectl create secret generic proxmox-agent-config \

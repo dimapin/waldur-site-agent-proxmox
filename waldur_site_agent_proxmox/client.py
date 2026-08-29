@@ -92,9 +92,21 @@ class ProxmoxClient(BaseClient):
             raise BackendError("Proxmox VM listing returned an invalid response")
         return [item for item in result if isinstance(item, dict)]
 
-    def _find_vm(self, vmid: str | int) -> Optional[dict[str, Any]]:
+    def ping(self) -> bool:
+        self._api("version lookup", lambda: self.api.version.get())
+        return True
+
+    def get_vm(self, vmid: str | int) -> Optional[dict[str, Any]]:
         wanted = str(vmid)
         return next((vm for vm in self._cluster_vms() if str(vm.get("vmid")) == wanted), None)
+
+    @staticmethod
+    def _description_needs_lookup(description: str, label: str) -> bool:
+        lines = description.splitlines()
+        if not lines:
+            return True
+        # A cluster response may contain only the beginning of the marker line.
+        return any(line and line != label and label.startswith(line) for line in lines)
 
     def find_by_waldur_uuid(self, value: str) -> Optional[dict[str, Any]]:
         marker, label = self.marker(value), self.label(value)
@@ -104,7 +116,9 @@ class ProxmoxClient(BaseClient):
                 matches.append(vm)
                 continue
             description = str(vm.get("description", ""))
-            if label not in description.splitlines():
+            if label not in description.splitlines() and self._description_needs_lookup(
+                description, label
+            ):
                 node = str(vm.get("node") or self.node)
                 vmid = vm.get("vmid")
                 config = self._api(
@@ -150,7 +164,7 @@ class ProxmoxClient(BaseClient):
     def _wait_for_vm(self, vmid: str | int, expected: Optional[str]) -> None:
         deadline = self._monotonic() + self.timeout
         while True:
-            vm = self._find_vm(vmid)
+            vm = self.get_vm(vmid)
             reached = (
                 vm is None if expected is None else vm is not None and vm.get("status") == expected
             )
@@ -181,9 +195,6 @@ class ProxmoxClient(BaseClient):
         self._poll_result(result)
 
     def provision_vm(self, waldur_uuid: str, name: str) -> str:
-        adopted = self.find_by_waldur_uuid(waldur_uuid)
-        if adopted is not None:
-            return str(adopted["vmid"])
         for _attempt in range(self.allocation_retries):
             adopted = self.find_by_waldur_uuid(waldur_uuid)
             if adopted is not None:
@@ -193,7 +204,7 @@ class ProxmoxClient(BaseClient):
                 vmid = int(raw_vmid)
             except (TypeError, ValueError) as exc:
                 raise BackendError("Proxmox nextid returned an invalid VMID") from exc
-            if self._find_vm(vmid) is not None:
+            if self.get_vm(vmid) is not None:
                 continue
             data = {
                 "newid": vmid,
@@ -226,7 +237,7 @@ class ProxmoxClient(BaseClient):
         )
 
     def delete_vm(self, vmid: str | int) -> None:
-        vm = self._find_vm(vmid)
+        vm = self.get_vm(vmid)
         if vm is None:
             return
         node = str(vm.get("node") or self.node)
@@ -240,7 +251,7 @@ class ProxmoxClient(BaseClient):
         self._wait_for_vm(vmid, None)
 
     def _power(self, vmid: str | int, target: str) -> None:
-        vm = self._find_vm(vmid)
+        vm = self.get_vm(vmid)
         if vm is None:
             raise BackendError(f"Proxmox VM {vmid} does not exist")
         if vm.get("status") == target:
@@ -270,7 +281,7 @@ class ProxmoxClient(BaseClient):
         ]
 
     def get_resource(self, resource_id: str) -> Optional[ClientResource]:
-        vm = self._find_vm(resource_id)
+        vm = self.get_vm(resource_id)
         if vm is None:
             return None
         return ClientResource(
@@ -287,15 +298,17 @@ class ProxmoxClient(BaseClient):
         raise BackendError("Proxmox creation requires a Waldur UUID; use provision_vm")
 
     def delete_resource(self, name: str) -> str:
-        self.delete_vm(name)
-        return name
+        """Delete the VM whose VMID is passed as BaseClient's backend-ID ``name``."""
+        vmid = name
+        self.delete_vm(vmid)
+        return vmid
 
     def set_resource_limits(self, resource_id: str, limits_dict: dict[str, int]) -> Optional[str]:
         unsupported = set(limits_dict) - {"cores", "memory"}
         if unsupported:
             names = ", ".join(sorted(unsupported))
             raise BackendError(f"Unsupported Proxmox limits: {names}")
-        vm = self._find_vm(resource_id)
+        vm = self.get_vm(resource_id)
         if vm is None:
             raise BackendError(f"Proxmox VM {resource_id} does not exist")
         node = str(vm.get("node") or self.node)
@@ -307,7 +320,7 @@ class ProxmoxClient(BaseClient):
         return result
 
     def get_resource_limits(self, resource_id: str) -> dict[str, int]:
-        vm = self._find_vm(resource_id)
+        vm = self.get_vm(resource_id)
         if vm is None:
             return {}
         node = str(vm.get("node") or self.node)

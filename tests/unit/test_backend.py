@@ -39,12 +39,6 @@ def test_backend_rejects_invalid_config_without_secret_in_error():
 def test_create_returns_confirmed_backend_id(client_class):
     client = client_class.return_value
     client.provision_vm.return_value = "123"
-    client._find_vm.return_value = {
-        "vmid": 123,
-        "name": "resource",
-        "node": "pve-a",
-        "status": "stopped",
-    }
     backend = ProxmoxBackend(SETTINGS, {})
     resource = SimpleNamespace(
         uuid="12345678-1234-5678-1234-567812345678", slug="resource", name="Resource"
@@ -52,6 +46,26 @@ def test_create_returns_confirmed_backend_id(client_class):
     info = backend.create_resource(resource)
     assert info.backend_id == "123"
     assert info.backend_metadata == {}
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_backend_uses_public_client_healthcheck(client_class):
+    client = client_class.return_value
+    client.ping.return_value = True
+    backend = ProxmoxBackend(SETTINGS, {})
+
+    assert backend.ping() is True
+    client.ping.assert_called_once_with()
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_metadata_uses_public_client_vm_lookup(client_class):
+    client = client_class.return_value
+    client.get_vm.return_value = {"vmid": 123, "status": "running", "extra": "ignored"}
+    backend = ProxmoxBackend(SETTINGS, {})
+
+    assert backend.get_resource_metadata("123") == {"vmid": 123, "status": "running"}
+    client.get_vm.assert_called_once_with("123")
 
 
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")

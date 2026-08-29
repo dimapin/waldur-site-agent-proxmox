@@ -56,8 +56,7 @@ class ProxmoxBackend(BaseBackend):
 
     def ping(self, raise_exception: bool = False) -> bool:
         try:
-            self.client._api("version lookup", lambda: self.client.api.version.get())
-            return True
+            return self.client.ping()
         except BackendError:
             if raise_exception:
                 raise
@@ -118,7 +117,7 @@ class ProxmoxBackend(BaseBackend):
         return True
 
     def get_resource_metadata(self, resource_backend_id: str) -> dict:
-        vm = self.client._find_vm(resource_backend_id)
+        vm = self.client.get_vm(resource_backend_id)
         if vm is None:
             return {}
         return {key: vm[key] for key in ("vmid", "name", "node", "status") if key in vm}

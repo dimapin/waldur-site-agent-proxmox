@@ -44,6 +44,40 @@ def test_marker_lookup_is_exact_and_adopts_before_create():
     client.api.cluster.nextid.get.assert_not_called()
 
 
+def test_provision_performs_only_one_initial_adoption_lookup():
+    client = make_client()
+    client.find_by_waldur_uuid = MagicMock(return_value={"vmid": 102})
+
+    assert client.provision_vm(UUID, "resource") == "102"
+    client.find_by_waldur_uuid.assert_called_once_with(UUID)
+
+
+def test_complete_unrelated_description_skips_config_lookup():
+    client = make_client()
+    client._cluster_vms = MagicMock(
+        return_value=[{"vmid": 103, "node": "pve", "description": "unrelated VM"}]
+    )
+
+    assert client.find_by_waldur_uuid(UUID) is None
+    client.api.nodes.assert_not_called()
+
+
+def test_truncated_marker_description_falls_back_to_config():
+    client = make_client()
+    label = client.label(UUID)
+    client._cluster_vms = MagicMock(
+        return_value=[{"vmid": 103, "node": "pve", "description": label[:20]}]
+    )
+    client.api.nodes.return_value.qemu.return_value.config.get.return_value = {"description": label}
+
+    assert client.find_by_waldur_uuid(UUID) == {
+        "vmid": 103,
+        "node": "pve",
+        "description": label[:20],
+    }
+    client.api.nodes.return_value.qemu.return_value.config.get.assert_called_once_with()
+
+
 def test_atomic_clone_label_is_adopted_after_tagging_crash():
     client = make_client()
     client._cluster_vms = MagicMock(return_value=[{"vmid": 103, "node": "pve"}])
@@ -68,9 +102,7 @@ def test_nextid_collision_is_retried():
     client = make_client(allocation_retries=2)
     client.find_by_waldur_uuid = MagicMock(return_value=None)
     client.api.cluster.nextid.get.side_effect = [101, 102]
-    client._find_vm = MagicMock(
-        side_effect=[{"vmid": 101}, None, {"vmid": 102, "status": "stopped"}]
-    )
+    client.get_vm = MagicMock(side_effect=[{"vmid": 101}, None, {"vmid": 102, "status": "stopped"}])
     client.api.nodes.return_value.qemu.return_value.clone.post.return_value = UPID
     client.wait_for_task = MagicMock()
     client._set_marker = MagicMock()
@@ -98,13 +130,21 @@ def test_wait_for_task_is_bounded():
 
 def test_delete_missing_vm_is_success():
     client = make_client()
-    client._find_vm = MagicMock(return_value=None)
+    client.get_vm = MagicMock(return_value=None)
     client.delete_vm(404)
+
+
+def test_base_client_delete_name_is_treated_as_vmid():
+    client = make_client()
+    client.delete_vm = MagicMock()
+
+    assert client.delete_resource("101") == "101"
+    client.delete_vm.assert_called_once_with("101")
 
 
 def test_delete_racing_404_is_success():
     client = make_client()
-    client._find_vm = MagicMock(return_value={"vmid": 101, "node": "pve"})
+    client.get_vm = MagicMock(return_value={"vmid": 101, "node": "pve"})
     client.api.nodes.return_value.qemu.return_value.delete.side_effect = ResourceException(
         404, "Not Found", "missing"
     )

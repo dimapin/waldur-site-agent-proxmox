@@ -42,7 +42,7 @@ class ProxmoxBackend(BaseBackend):
         except ValidationError as exc:
             details = exc.errors(include_input=False, include_url=False)
             raise ConfigurationError(f"Invalid Proxmox backend settings: {details}") from exc
-        values = settings.model_dump()
+        values = settings.model_dump(exclude={"soft_delete"})
         values["token_value"] = settings.token_value.get_secret_value()
         self.client = ProxmoxClient(**values)
 

@@ -104,6 +104,7 @@ def test_terminate_honors_soft_delete(client_class):
         dict(SETTINGS, soft_delete=True),
         {"cores": {"unit_factor": 1}, "memory": {"unit_factor": 1}},
     )
+    assert "soft_delete" not in client_class.call_args.kwargs
 
     assert backend.delete_resource(SimpleNamespace(backend_id="123")) is None
     client.set_resource_limits.assert_called_once_with("123", {"cores": 0, "memory": 0})

@@ -317,7 +317,7 @@ class ProxmoxClient(BaseClient):
             lambda: self.api.nodes(node).qemu(resource_id).config.put(**limits_dict),
         )
         self._poll_result(result)
-        return result
+        return None
 
     def get_resource_limits(self, resource_id: str) -> dict[str, int]:
         vm = self.get_vm(resource_id)

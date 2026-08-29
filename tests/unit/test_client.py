@@ -142,6 +142,18 @@ def test_base_client_delete_name_is_treated_as_vmid():
     client.delete_vm.assert_called_once_with("101")
 
 
+def test_set_resource_limits_returns_none_after_polling():
+    client = make_client()
+    client.get_vm = MagicMock(return_value={"vmid": 101, "node": "pve"})
+    config = client.api.nodes.return_value.qemu.return_value.config
+    config.put.return_value = UPID
+    client._poll_result = MagicMock()
+
+    assert client.set_resource_limits("101", {"cores": 4, "memory": 8192}) is None
+    config.put.assert_called_once_with(cores=4, memory=8192)
+    client._poll_result.assert_called_once_with(UPID)
+
+
 def test_delete_racing_404_is_success():
     client = make_client()
     client.get_vm = MagicMock(return_value={"vmid": 101, "node": "pve"})

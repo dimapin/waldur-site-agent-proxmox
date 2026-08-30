@@ -95,7 +95,25 @@ class ProxmoxBackend(BaseBackend):
     def create_resource(
         self, waldur_resource: object, user_context: Optional[dict] = None
     ) -> BackendResourceInfo:
-        del user_context
+        return self.create_resource_with_id(waldur_resource, "", user_context)
+
+    def create_resource_with_id(
+        self,
+        waldur_resource: object,
+        resource_backend_id: str,
+        user_context: Optional[dict] = None,
+    ) -> BackendResourceInfo:
+        """Clone the template; Proxmox itself assigns the backend ID.
+
+        The processor calls this method directly, passing an ID the core derived
+        from ``waldur_resource.slug``. That value is deliberately discarded: for
+        Proxmox the backend ID is the VMID, which only exists once
+        ``cluster/nextid`` has handed one out. Feeding the slug through as if it
+        were the Waldur UUID is what produced "badly formed hexadecimal UUID
+        string" -- and it would also break adoption, because the idempotency
+        marker has to be the UUID.
+        """
+        del resource_backend_id, user_context
         resource_uuid = str(getattr(waldur_resource, "uuid", ""))
         backend_id = self.client.provision_vm(resource_uuid, self._name(waldur_resource))
         return BackendResourceInfo(backend_id=backend_id)

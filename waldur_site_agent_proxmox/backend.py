@@ -114,18 +114,10 @@ class ProxmoxBackend(BaseBackend):
         string" -- and it would also break adoption, because the idempotency
         marker has to be the UUID.
         """
-        del resource_backend_id, user_context
+        del resource_backend_id
         resource_uuid = str(getattr(waldur_resource, "uuid", ""))
-        return self.create_resource_with_id(waldur_resource, resource_uuid, user_context)
-
-    def create_resource_with_id(
-        self,
-        waldur_resource: object,
-        resource_backend_id: str,
-        user_context: Optional[dict] = None,
-    ) -> BackendResourceInfo:
         self._pre_create_resource(waldur_resource, user_context)
-        backend_id = self.client.provision_vm(resource_backend_id, self._name(waldur_resource))
+        backend_id = self.client.provision_vm(resource_uuid, self._name(waldur_resource))
         limits = self._setup_resource_limits(backend_id, waldur_resource)
         info = BackendResourceInfo(backend_id=backend_id, limits=limits)
         self.post_create_resource(info, waldur_resource, user_context)

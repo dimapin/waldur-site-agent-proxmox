@@ -65,6 +65,27 @@ def test_create_returns_confirmed_backend_id(client_class):
 
 
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_create_with_id_ignores_core_backend_id_and_uses_uuid(client_class):
+    """The processor calls create_resource_with_id with a slug-derived ID.
+
+    That ID must not reach provision_vm: it is not a UUID, so the marker lookup
+    would raise "badly formed hexadecimal UUID string" and no VM would ever be
+    cloned. The VMID is assigned by Proxmox and comes back from the client.
+    """
+    client = client_class.return_value
+    client.provision_vm.return_value = "456"
+    backend = ProxmoxBackend(SETTINGS, {})
+    resource = SimpleNamespace(
+        uuid="12345678-1234-5678-1234-567812345678", slug="resource", name="Resource"
+    )
+
+    info = backend.create_resource_with_id(resource, "resource-slug-42")
+
+    assert info.backend_id == "456"
+    client.provision_vm.assert_called_once_with("12345678-1234-5678-1234-567812345678", "resource")
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
 def test_backend_uses_public_client_healthcheck(client_class):
     client = client_class.return_value
     client.ping.return_value = True

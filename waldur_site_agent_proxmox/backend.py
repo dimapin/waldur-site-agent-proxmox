@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import Field, SecretStr, ValidationError
 from waldur_site_agent.backend.backends import BaseBackend
@@ -76,10 +76,30 @@ class ProxmoxBackend(BaseBackend):
         del resource_backend_ids
         return {}
 
+    @staticmethod
+    def _limits_as_dict(raw: object) -> dict[str, Any]:
+        """Normalise ``waldur_resource.limits`` to a plain mapping.
+
+        The API client hands over a ``ResourceLimits`` attrs object, not a dict:
+        it carries the values in ``additional_properties`` and exposes
+        ``to_dict()``, ``__getitem__`` and ``__contains__`` -- but no
+        ``items()``. Calling ``items()`` on it raised AttributeError and failed
+        the whole create order. Plain dicts still work, which keeps unit tests
+        and any caller that already normalised the value working.
+        """
+        if not raw:
+            return {}
+        if isinstance(raw, dict):
+            return raw
+        to_dict = getattr(raw, "to_dict", None)
+        if callable(to_dict):
+            return dict(to_dict())
+        raise BackendError(f"Unsupported Waldur limits payload: {type(raw).__name__}")
+
     def _collect_resource_limits(
         self, waldur_resource: object
     ) -> tuple[dict[str, int], dict[str, int]]:
-        requested = getattr(waldur_resource, "limits", {}) or {}
+        requested = self._limits_as_dict(getattr(waldur_resource, "limits", None))
         supported = {"cores", "memory"}
         waldur_limits = {key: int(value) for key, value in requested.items() if key in supported}
         backend_limits = {

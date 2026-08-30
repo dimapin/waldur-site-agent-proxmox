@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from waldur_api_client.models.resource_limits import ResourceLimits
 from waldur_site_agent.backend.exceptions import BackendError, ConfigurationError
 
 from waldur_site_agent_proxmox.backend import ProxmoxBackend, ProxmoxBackendSettings
@@ -83,6 +84,40 @@ def test_create_with_id_ignores_core_backend_id_and_uses_uuid(client_class):
 
     assert info.backend_id == "456"
     client.provision_vm.assert_called_once_with("12345678-1234-5678-1234-567812345678", "resource")
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_collect_limits_accepts_api_client_resource_limits(client_class):
+    """Waldur hands over a ResourceLimits attrs object, not a dict.
+
+    It exposes to_dict()/__getitem__ but no items(); calling items() on it
+    raised AttributeError and failed the whole create order.
+    """
+    del client_class
+    limits = ResourceLimits.from_dict({"cores": 4, "memory": 2048, "gpu": 1})
+    backend = ProxmoxBackend(SETTINGS, {})
+
+    backend_limits, waldur_limits = backend._collect_resource_limits(SimpleNamespace(limits=limits))
+
+    # gpu is not supported by the Proxmox client and must be dropped.
+    assert waldur_limits == {"cores": 4, "memory": 2048}
+    assert backend_limits == {"cores": 4, "memory": 2048}
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+@pytest.mark.parametrize("empty", [None, {}, ResourceLimits.from_dict({})])
+def test_collect_limits_tolerates_missing_limits(client_class, empty):
+    del client_class
+    backend = ProxmoxBackend(SETTINGS, {})
+    assert backend._collect_resource_limits(SimpleNamespace(limits=empty)) == ({}, {})
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_collect_limits_rejects_unknown_payload(client_class):
+    del client_class
+    backend = ProxmoxBackend(SETTINGS, {})
+    with pytest.raises(BackendError, match="Unsupported Waldur limits payload"):
+        backend._collect_resource_limits(SimpleNamespace(limits="cores=4"))
 
 
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")

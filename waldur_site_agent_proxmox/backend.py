@@ -96,6 +96,8 @@ class ProxmoxBackend(BaseBackend):
     def create_resource(
         self, waldur_resource: object, user_context: Optional[dict] = None
     ) -> BackendResourceInfo:
+        # The empty string is intentional: create_resource_with_id ignores
+        # resource_backend_id and derives the VMID/UUID from waldur_resource itself.
         return self.create_resource_with_id(waldur_resource, "", user_context)
 
     def create_resource_with_id(

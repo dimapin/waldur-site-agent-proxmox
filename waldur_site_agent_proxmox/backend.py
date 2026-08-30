@@ -28,6 +28,7 @@ class ProxmoxBackendSettings(PluginBackendSettingsSchema):
     pool: Optional[str] = None
     full_clone: bool = True
     start_after_create: bool = False
+    soft_delete: bool = False
 
 
 class ProxmoxBackend(BaseBackend):
@@ -41,7 +42,7 @@ class ProxmoxBackend(BaseBackend):
         except ValidationError as exc:
             details = exc.errors(include_input=False, include_url=False)
             raise ConfigurationError(f"Invalid Proxmox backend settings: {details}") from exc
-        values = settings.model_dump()
+        values = settings.model_dump(exclude={"soft_delete"})
         values["token_value"] = settings.token_value.get_secret_value()
         self.client = ProxmoxClient(**values)
 
@@ -115,15 +116,20 @@ class ProxmoxBackend(BaseBackend):
         """
         del resource_backend_id, user_context
         resource_uuid = str(getattr(waldur_resource, "uuid", ""))
-        backend_id = self.client.provision_vm(resource_uuid, self._name(waldur_resource))
-        return BackendResourceInfo(backend_id=backend_id)
+        return self.create_resource_with_id(waldur_resource, resource_uuid, user_context)
 
-    def delete_resource(self, waldur_resource: object, **kwargs: str) -> Optional[str]:
-        del kwargs
-        backend_id = str(getattr(waldur_resource, "backend_id", "") or "")
-        if backend_id:
-            self.client.delete_vm(backend_id)
-        return None
+    def create_resource_with_id(
+        self,
+        waldur_resource: object,
+        resource_backend_id: str,
+        user_context: Optional[dict] = None,
+    ) -> BackendResourceInfo:
+        self._pre_create_resource(waldur_resource, user_context)
+        backend_id = self.client.provision_vm(resource_backend_id, self._name(waldur_resource))
+        limits = self._setup_resource_limits(backend_id, waldur_resource)
+        info = BackendResourceInfo(backend_id=backend_id, limits=limits)
+        self.post_create_resource(info, waldur_resource, user_context)
+        return info
 
     def downscale_resource(self, resource_backend_id: str) -> bool:
         del resource_backend_id

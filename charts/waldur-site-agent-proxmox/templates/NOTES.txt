@@ -1,0 +1,5 @@
+The Waldur Site Agent for Proxmox has been deployed.
+
+Configuration secret: {{ include "waldur-site-agent-proxmox.configSecretName" . }}
+Agent mode: {{ .Values.agent.mode }}
+

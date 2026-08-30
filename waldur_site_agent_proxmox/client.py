@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from proxmoxer import ProxmoxAPI
 from proxmoxer.core import ResourceException
-from proxmoxer.tools.tasks import Tasks
+from proxmoxer.tools import Tasks
 from waldur_site_agent.backend.clients import BaseClient
 from waldur_site_agent.backend.exceptions import BackendError
 from waldur_site_agent.backend.structures import Association, ClientResource

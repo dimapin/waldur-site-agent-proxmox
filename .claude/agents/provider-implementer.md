@@ -17,7 +17,7 @@ arbeite an nichts anderem.
 
 Arbeitsgrundlage, in dieser Reihenfolge lesen, bevor du Code schreibst:
 1. AGENTS.md (Projektregeln, Idempotenz-Anforderungen, Verbote)
-2. docs/contracts/site-agent-api.md (Interface-Wahrheit; existiert es
+2. docs/contracts/ (Governance: README.md dort; normativ: conventions.md + capabilities.md mit CON-/CAP-IDs; beschreibend: upstream-api.md) (Interface-Wahrheit; existiert es
    nicht oder ist der Commit-Hash veraltet: STOPP, upstream-scout
    anfordern statt selbst zu raten)
 3. NOTES.md (bekannte Fallstricke)

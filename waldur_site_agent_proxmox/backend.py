@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from pydantic import Field, SecretStr, ValidationError
 from waldur_site_agent.backend.backends import BaseBackend
@@ -33,6 +33,13 @@ class ProxmoxBackendSettings(PluginBackendSettingsSchema):
 
 class ProxmoxBackend(BaseBackend):
     supports_cycle_preflight = True
+    _BYTES_PER_MIB = 1024**2
+    _BYTES_PER_GIB = 1024**3
+    _USAGE_FIELDS: ClassVar[dict[str, tuple[str, int]]] = {
+        "cores": ("maxcpu", 1),
+        "memory": ("maxmem", _BYTES_PER_MIB),
+        "storage": ("maxdisk", _BYTES_PER_GIB),
+    }
 
     def __init__(self, backend_settings: dict, backend_components: dict[str, dict]) -> None:
         super().__init__(backend_settings, backend_components)
@@ -73,8 +80,30 @@ class ProxmoxBackend(BaseBackend):
         return list(self.backend_components)
 
     def _get_usage_report(self, resource_backend_ids: list[str]) -> dict:
-        del resource_backend_ids
-        return {}
+        report = {}
+        for resource_backend_id in resource_backend_ids:
+            vm = self.client.get_vm(resource_backend_id)
+            if vm is None:
+                raise BackendError(f"Proxmox VM {resource_backend_id} does not exist")
+            usage = {}
+            for component_name, component in self.backend_components.items():
+                field = self._USAGE_FIELDS.get(component_name)
+                if field is None:
+                    continue
+                provider_field, provider_unit = field
+                try:
+                    provider_value = float(vm[provider_field]) / provider_unit
+                    reporting_factor = component.get("unit_factor_reporting")
+                    if reporting_factor is None:
+                        reporting_factor = component.get("unit_factor", 1)
+                    value = provider_value / float(reporting_factor)
+                except (KeyError, TypeError, ValueError, ZeroDivisionError) as exc:
+                    raise BackendError(
+                        f"Invalid Proxmox usage data for component {component_name}"
+                    ) from exc
+                usage[component_name] = int(value) if value.is_integer() else value
+            report[resource_backend_id] = {"TOTAL_ACCOUNT_USAGE": usage}
+        return report
 
     @staticmethod
     def _limits_as_dict(raw: object) -> dict[str, Any]:
@@ -141,7 +170,8 @@ class ProxmoxBackend(BaseBackend):
         self._pre_create_resource(waldur_resource, user_context)
         backend_id = self.client.provision_vm(resource_uuid, self._name(waldur_resource))
         limits = self._setup_resource_limits(backend_id, waldur_resource)
-        info = BackendResourceInfo(backend_id=backend_id, limits=limits)
+        metadata = self.get_resource_metadata(backend_id)
+        info = BackendResourceInfo(backend_id=backend_id, limits=limits, backend_metadata=metadata)
         self.post_create_resource(info, waldur_resource, user_context)
         return info
 
@@ -161,4 +191,22 @@ class ProxmoxBackend(BaseBackend):
         vm = self.client.get_vm(resource_backend_id)
         if vm is None:
             return {}
-        return {key: vm[key] for key in ("vmid", "name", "node", "status") if key in vm}
+        try:
+            metadata = {
+                "provider_resource_id": str(vm["vmid"]),
+                "region": str(vm["node"]),
+                "vcpu": int(vm["maxcpu"]),
+                "ram_gib": float(vm["maxmem"]) / self._BYTES_PER_GIB,
+                "disk_gib": float(vm["maxdisk"]) / self._BYTES_PER_GIB,
+            }
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BackendError(
+                f"Proxmox VM {resource_backend_id} returned incomplete compute metadata"
+            ) from exc
+        for field in ("ram_gib", "disk_gib"):
+            value = metadata[field]
+            if isinstance(value, float) and value.is_integer():
+                metadata[field] = int(value)
+        if vm.get("ip"):
+            metadata["public_ip"] = str(vm["ip"])
+        return metadata

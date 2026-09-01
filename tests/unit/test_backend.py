@@ -49,6 +49,13 @@ def test_name_fallback_rejects_missing_or_invalid_uuid(resource):
 def test_create_returns_confirmed_backend_id(client_class):
     client = client_class.return_value
     client.provision_vm.return_value = "123"
+    client.get_vm.return_value = {
+        "vmid": 123,
+        "node": "pve-a",
+        "maxcpu": 8,
+        "maxmem": 16 * 1024**3,
+        "maxdisk": 80 * 1024**3,
+    }
     backend = ProxmoxBackend(
         SETTINGS, {"cores": {"label": "Cores", "measured_unit": "cores", "unit_factor": 2}}
     )
@@ -60,7 +67,13 @@ def test_create_returns_confirmed_backend_id(client_class):
     )
     info = backend.create_resource(resource)
     assert info.backend_id == "123"
-    assert info.backend_metadata == {}
+    assert info.backend_metadata == {
+        "provider_resource_id": "123",
+        "region": "pve-a",
+        "vcpu": 8,
+        "ram_gib": 16,
+        "disk_gib": 80,
+    }
     assert info.limits == {"cores": 4}
     client.set_resource_limits.assert_called_once_with("123", {"cores": 8})
 
@@ -75,6 +88,13 @@ def test_create_with_id_ignores_core_backend_id_and_uses_uuid(client_class):
     """
     client = client_class.return_value
     client.provision_vm.return_value = "456"
+    client.get_vm.return_value = {
+        "vmid": 456,
+        "node": "pve-a",
+        "maxcpu": 2,
+        "maxmem": 4 * 1024**3,
+        "maxdisk": 20 * 1024**3,
+    }
     backend = ProxmoxBackend(SETTINGS, {})
     resource = SimpleNamespace(
         uuid="12345678-1234-5678-1234-567812345678", slug="resource", name="Resource"
@@ -133,11 +153,51 @@ def test_backend_uses_public_client_healthcheck(client_class):
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
 def test_metadata_uses_public_client_vm_lookup(client_class):
     client = client_class.return_value
-    client.get_vm.return_value = {"vmid": 123, "status": "running", "extra": "ignored"}
+    client.get_vm.return_value = {
+        "vmid": 123,
+        "node": "pve-a",
+        "maxcpu": 4,
+        "maxmem": 8 * 1024**3,
+        "maxdisk": 40 * 1024**3,
+        "status": "running",
+        "extra": "ignored",
+    }
     backend = ProxmoxBackend(SETTINGS, {})
 
-    assert backend.get_resource_metadata("123") == {"vmid": 123, "status": "running"}
+    assert backend.get_resource_metadata("123") == {
+        "provider_resource_id": "123",
+        "region": "pve-a",
+        "vcpu": 4,
+        "ram_gib": 8,
+        "disk_gib": 40,
+    }
     client.get_vm.assert_called_once_with("123")
+
+
+@patch("waldur_site_agent_proxmox.backend.ProxmoxClient")
+def test_usage_report_contains_only_configured_components_in_waldur_units(client_class):
+    client = client_class.return_value
+    client.get_vm.return_value = {
+        "vmid": 123,
+        "maxcpu": 4,
+        "maxmem": 8 * 1024**3,
+        "maxdisk": 40 * 1024**3,
+    }
+    backend = ProxmoxBackend(
+        SETTINGS,
+        {
+            "cores": {"unit_factor": 1},
+            "memory": {"unit_factor": 1024},
+            "storage": {"unit_factor_reporting": 1},
+            "traffic": {"unit_factor": 1},
+        },
+    )
+
+    assert backend._get_usage_report(["123"]) == {
+        "123": {
+            "TOTAL_ACCOUNT_USAGE": {"cores": 4, "memory": 8, "storage": 40},
+        }
+    }
 
 
 @patch("waldur_site_agent_proxmox.backend.ProxmoxClient")

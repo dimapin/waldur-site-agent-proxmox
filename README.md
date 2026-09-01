@@ -32,8 +32,9 @@ backend_settings:
 ```
 
 The API token needs audit access plus clone, VM configuration, power, and deletion
-permissions for the configured template and target scope. Membership synchronization and
-usage reporting are intentionally not implemented because their provider scope is unresolved.
+permissions for the configured template and target scope. Usage reporting reads allocated CPU,
+memory, and storage from the Proxmox cluster API. Membership synchronization is intentionally
+not implemented because its provider scope is unresolved.
 
 ## Container image
 

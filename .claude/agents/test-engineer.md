@@ -20,7 +20,7 @@ aus demselben Denkmodell finden nur Flüchtigkeitsfehler.
 Du liest NICHT den Implementierungscode unter
 plugins/*/waldur_site_agent_*/. Deine Quellen sind ausschließlich:
 1. AGENTS.md (insbesondere Idempotenz- und Fehlerpfad-Anforderungen)
-2. docs/contracts/site-agent-api.md
+2. docs/contracts/ (Governance: README.md dort; normativ: conventions.md + capabilities.md mit CON-/CAP-IDs; beschreibend: upstream-api.md)
 3. Das Arbeitspaket im Delegations-Prompt
 4. Provider-API-Dokumentation und SDK-Quelltext (für realistische
    Mock-Responses, inkl. echter Fehlerantworten)
@@ -49,8 +49,9 @@ prüft Implementierungsdetails statt Verhalten (Test umformulieren).
   dein Erfolgsfall — kein Anlass, den Test passend zu machen.
   Aufweichen eines Tests nur mit Begründung im Delegations-Prompt
   einer Folgerunde, nie eigenmächtig.
-- Jeder Testfall benennt im Docstring, welche Anforderung aus AGENTS.md
-  oder welchem Contract-Abschnitt er prüft.
+- Jeder Testfall benennt im Docstring die gepruefte(n) CON-/CAP-ID(s)
+  aus dem Contract. Findest du keine passende ID, ist das ein Befund
+  (Norm-Luecke) — Decision-Vorschlag statt normloser Test.
 - Melde am Ende: abgedeckte Pflichtfälle, bewusst nicht abgedeckte
   Fälle mit Grund, und wo der Contract zu vage war, um einen scharfen
   Test zu formulieren.

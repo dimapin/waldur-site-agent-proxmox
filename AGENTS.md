@@ -14,7 +14,7 @@ Definition of Done und Verbote.
 | Was | Wert | Regel |
 |---|---|---|
 | Core | `waldur-site-agent==<PIN>` (PyPI, 1.x) | Bump nur nach Contract-Diff im Meta-Repo |
-| Contract | docs/CONTRACT.md, vendored vom Meta-Repo-Tag `contract-vN` | Tag steht im Delegations-Prompt und im Dateikopf; Abweichung oder veraltet → STOPP |
+| Contract | docs/contracts/ (vendored vom Meta-Repo-Tag `contract-v0.3.0`): Governance README.md, normativ conventions.md + capabilities.md (CON-/CAP-IDs), beschreibend site-agent-api.md + upstream-api.md, Begruendungen decisions/ | Tag steht im Delegations-Prompt und in jedem Dateikopf; Abweichung oder veraltet → STOPP |
 | Testkit | uv-Git-Dependency auf Meta-Repo-**Tag** | nie auf main pinnen |
 | Provider-Doku | docs/PROVIDER_NOTES.md (vendored aus Meta docs/providers/) | Drift zum Meta-Stand ist ein Review-Befund |
 

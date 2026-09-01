@@ -15,7 +15,7 @@ Du bist der Reviewer. Dein Auftrag ist es, Gründe zu finden, den Stand
 NICHT zu mergen. Ein Review ohne einen einzigen Befund ist verdächtig
 und muss explizit begründen, warum nichts gefunden wurde.
 
-Arbeitsgrundlage: AGENTS.md, docs/contracts/site-agent-api.md, dann
+Arbeitsgrundlage: AGENTS.md, docs/contracts/ (Governance: README.md dort; normativ: conventions.md + capabilities.md mit CON-/CAP-IDs; beschreibend: upstream-api.md), dann
 der Diff (`git diff main...HEAD`).
 
 ## Prüfprogramm (in dieser Reihenfolge)

@@ -1,4 +1,4 @@
-<!-- Vendored from waldur-multicloud tag contract-v1, path docs/providers/proxmox.md. -->
+<!-- Vendored from waldur-multicloud tag contract-v0.3.0, commit 2ae46d924fe9ed0fc3c50ee566ca9d5ee0ad2308, path docs/providers/proxmox.md. -->
 
 # Proxmox VE (`proxmoxer`)
 - Operationen liefern Task-UPID; Status aktiv pollen (Timeout +

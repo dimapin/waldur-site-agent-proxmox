@@ -171,9 +171,7 @@ class ProxmoxBackend(BaseBackend):
         backend_id = self.client.provision_vm(resource_uuid, self._name(waldur_resource))
         limits = self._setup_resource_limits(backend_id, waldur_resource)
         metadata = self.get_resource_metadata(backend_id)
-        info = BackendResourceInfo(
-            backend_id=backend_id, limits=limits, backend_metadata=metadata
-        )
+        info = BackendResourceInfo(backend_id=backend_id, limits=limits, backend_metadata=metadata)
         self.post_create_resource(info, waldur_resource, user_context)
         return info
 

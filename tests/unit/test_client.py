@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, call
 
 import pytest
+import requests
 from proxmoxer.core import ResourceException
 from waldur_site_agent.backend.exceptions import BackendError
 
@@ -124,6 +125,45 @@ def test_nextid_collision_is_retried():
     client._set_marker = MagicMock()
     assert client.provision_vm(UUID, "resource") == "102"
     assert client.api.cluster.nextid.get.call_count == 2
+
+
+def test_wait_for_task_rides_out_dropped_connection():
+    """pveproxy recycles workers mid-clone; the task keeps running server-side.
+
+    Aborting here would erred an order whose clone actually succeeded and leave
+    an untagged VM behind -- exactly the orphan this guards against.
+    """
+    client = make_client()
+    ssl_eof = requests.exceptions.SSLError("TLS/SSL connection has been closed (EOF)")
+    client.api.nodes.return_value.tasks.return_value.status.get.side_effect = [
+        ssl_eof,
+        ssl_eof,
+        {"status": "stopped", "exitstatus": "OK"},
+    ]
+
+    assert client.wait_for_task(UPID)["exitstatus"] == "OK"
+    assert client.api.nodes.return_value.tasks.return_value.status.get.call_count == 3
+
+
+def test_wait_for_task_still_fails_on_rejected_request():
+    """A 403 is a verdict, not a lost connection -- it must not be retried."""
+    client = make_client()
+    client.api.nodes.return_value.tasks.return_value.status.get.side_effect = ResourceException(
+        403, "Forbidden", "Permission check failed"
+    )
+    with pytest.raises(BackendError, match="task status failed"):
+        client.wait_for_task(UPID)
+
+
+def test_wait_for_task_dropped_connection_is_bounded():
+    """Retrying is bounded by the same deadline as ordinary polling."""
+    clock = iter([0, 0, 10, 400, 400, 400])
+    client = make_client(timeout=300, monotonic=lambda: next(clock))
+    client.api.nodes.return_value.tasks.return_value.status.get.side_effect = (
+        requests.exceptions.ConnectionError("connection reset")
+    )
+    with pytest.raises(BackendError, match="task status failed"):
+        client.wait_for_task(UPID)
 
 
 def test_wait_for_task_requires_ok():

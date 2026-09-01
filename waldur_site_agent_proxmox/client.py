@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any, Optional
 
+import requests
 from proxmoxer import ProxmoxAPI
 from proxmoxer.core import ResourceException
 from proxmoxer.tools import Tasks
@@ -142,6 +143,44 @@ class ProxmoxClient(BaseClient):
             or ("vmid" in text and "exist" in text)
         )
 
+    @staticmethod
+    def _is_transient(exc: BaseException) -> bool:
+        """Whether a failure is a lost connection rather than a rejected request.
+
+        pveproxy recycles its workers while a task is still running; proxmoxer
+        keeps a keep-alive session, so the socket dies mid-poll with an SSL EOF
+        or a plain connection reset. The task itself keeps running server-side,
+        so giving up here would fail an order for a clone that actually
+        succeeded -- and leave the VM behind untracked.
+
+        requests.exceptions.SSLError and ConnectTimeout both derive from
+        ConnectionError, so the two classes below cover the whole family.
+        """
+        seen = set()
+        current: Optional[BaseException] = exc
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(
+                current, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+            ):
+                return True
+            current = current.__cause__ or current.__context__
+        return False
+
+    def _poll_api(self, action: str, call: Callable[[], Any], deadline: float) -> Any:
+        """Read-only poll that rides out lost connections until the deadline.
+
+        Deliberately not used for state-changing calls: retrying a clone POST
+        after a lost response could create a second VM.
+        """
+        while True:
+            try:
+                return self._api(action, call)
+            except BackendError as exc:
+                if not self._is_transient(exc) or self._monotonic() >= deadline:
+                    raise
+                self._sleep(self.polling_interval)
+
     def wait_for_task(self, upid: str) -> dict[str, Any]:
         try:
             node = str(Tasks.decode_upid(upid)["node"])
@@ -149,7 +188,9 @@ class ProxmoxClient(BaseClient):
             raise BackendError("Proxmox operation did not return a valid task UPID") from exc
         deadline = self._monotonic() + self.timeout
         while True:
-            status = self._api("task status", lambda: self.api.nodes(node).tasks(upid).status.get())
+            status = self._poll_api(
+                "task status", lambda: self.api.nodes(node).tasks(upid).status.get(), deadline
+            )
             if not isinstance(status, dict):
                 raise BackendError("Proxmox task status returned an invalid response")
             if status.get("status") == "stopped":
@@ -164,7 +205,15 @@ class ProxmoxClient(BaseClient):
     def _wait_for_vm(self, vmid: str | int, expected: Optional[str]) -> None:
         deadline = self._monotonic() + self.timeout
         while True:
-            vm = self.get_vm(vmid)
+            try:
+                vm = self.get_vm(vmid)
+            except BackendError as exc:
+                # Same reasoning as in _poll_api: a dropped connection while
+                # waiting is not a verdict on the VM.
+                if not self._is_transient(exc) or self._monotonic() >= deadline:
+                    raise
+                self._sleep(self.polling_interval)
+                continue
             reached = (
                 vm is None if expected is None else vm is not None and vm.get("status") == expected
             )
